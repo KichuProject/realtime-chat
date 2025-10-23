@@ -1,10 +1,10 @@
 import express from 'express';
 import { signup, login, logout, updateProfile, checkAuth } from '../controllers/auth.controller.js';
-import { protectRoute, sendSms, verifyOtpMiddleware } from '../middlewares/auth.middleware.js';
+import { protectRoute, verifyOtp, sendOtp } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
-router.post('/send-otp', sendSms);
-router.post('/signup', verifyOtpMiddleware, signup);
+router.post('/send-otp', sendOtp);
+router.post('/signup', verifyOtp, signup);
 router.post('/login',login);
 router.get('/logout',logout);
 

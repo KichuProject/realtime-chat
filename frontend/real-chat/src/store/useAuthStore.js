@@ -13,11 +13,7 @@ export const useAuthStore = create((set,get) => ({
     isCheckingAuth:true,
     onlineUsers:[],
     socket:null,
-    _isLocal10: (phone) => {
-        if (!phone || typeof phone !== 'string') return false;
-        const digits = phone.replace(/\D/g, '');
-        return digits.length === 10;
-    },
+    
     checkAuth:async () => {
         try {
             const res=await axiosInstance.get('/auth/check');
@@ -31,47 +27,49 @@ export const useAuthStore = create((set,get) => ({
         }
     },
 
-    signUp:async (data) => {
-    set({isSigningUp:true});
-    try {
-        if (!data?.phone || !data?.code) {
-            toast.error('Phone and OTP code are required');
-            return;
-        }
-        if (!get()._isLocal10(data.phone)) {
-            toast.error('Please enter a 10-digit phone number');
-            return;
-        }
-        const payload = { ...data, phone: String(data.phone).replace(/\D/g, '') };
-
-        const res=await axiosInstance.post('/auth/signup', payload);
-        set({authUser:res.data});
-        toast.success("Account created successfully");
-        get().connectSocket();
-        } catch (error) {
-            toast.error(error.response?.data?.message);
-        }
-        finally{
-            set({isSigningUp:false});
-        }
-    },
-    sendOtp: async (phone) => {
+    sendOtp: async (email) => {
         try {
-            if (!phone) {
-                toast.error('Phone is required');
+            if (!email) {
+                toast.error('Email is required');
                 return;
             }
-            if (!get()._isLocal10(phone)) {
-                toast.error('Please enter a 10-digit phone number');
-                return;
-            }
-            const digitsOnly = String(phone).replace(/\D/g, '');
-            const res = await axiosInstance.post('/auth/send-otp', { phone: digitsOnly });
-            toast.success(res.data?.message || 'OTP sent');
+            
+            const res = await axiosInstance.post('/auth/send-otp', { email });
+            toast.success(res.data.message || 'OTP sent to your email');
             return res.data;
         } catch (error) {
+            console.error('sendOtp error', error);
             toast.error(error.response?.data?.message || 'Failed to send OTP');
             throw error;
+        }
+    },
+
+    signUp:async (data) => {
+        set({isSigningUp:true});
+        try {
+            const { fullName, email, password, phone, otp } = data || {};
+            if (!fullName || !email || !password || !otp) {
+                toast.error('All fields are required');
+                return;
+            }
+
+            const payload = { 
+                fullName: String(fullName).trim(), 
+                email: String(email).trim(), 
+                password: String(password), 
+                phone: phone || '',
+                otp: String(otp).trim()
+            };
+            
+            const res = await axiosInstance.post('/auth/signup', payload);
+
+            set({authUser:res.data});
+            toast.success("Account created successfully");
+            get().connectSocket();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to create account');
+        } finally {
+            set({isSigningUp:false});
         }
     },
     login:async (data) => {

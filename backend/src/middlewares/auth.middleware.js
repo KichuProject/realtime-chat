@@ -1,92 +1,74 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/user.model.js';
-import twilio from 'twilio';
+import { sendOtpEmail } from '../lib/email.js';
 
 const otpStore = new Map();
 
-const toLocal10 = (raw) => {
-    if (!raw) return null;
-    const digits = String(raw).replace(/\D/g, '');
-    return digits.length === 10 ? digits : null;
-};
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
-const toE164 = (raw) => {
-    const v = String(raw || '').trim();
-    if (/^\+\d{10,15}$/.test(v)) return v;
-    const local = toLocal10(v);
-    const cc = process.env.DEFAULT_COUNTRY_CODE || '+91';
-    return local ? `${cc}${local}` : null;
-};
-
-const twilioClient = (() => {
-    const sid = process.env.TWILIO_ACCOUNT_SID;
-    const token = process.env.TWILIO_AUTH_TOKEN;
-    if (!sid || !token) return null;
-    return twilio(sid, token);
-})();
-
-export const sendSms = async (req, res) => {
+export const sendOtp = async (req, res) => {
     try {
-    const rawPhone = req.body.phone;
-    if (!rawPhone) return res.status(400).json({ message: 'Phone number is required' });
-    const local = toLocal10(rawPhone);
-    if (!local) return res.status(400).json({ message: 'Phone must be a 10-digit number' });
-    const to = toE164(rawPhone);
-
-        if (!twilioClient) return res.status(500).json({ message: 'Twilio not configured' });
-
-        const from = process.env.TWILIO_PHONE_NUMBER;
-        if (!from) return res.status(500).json({ message: 'TWILIO_PHONE_NUMBER not configured' });
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        const expires = Date.now() + 10 * 60 * 1000;
-        otpStore.set(local, { otp, expires });
-
-        if (process.env.NODE_ENV !== 'production') {
-            console.log(`[DEV] OTP for ${local} (to ${to}): ${otp}`);
+        const { email } = req.body;
+        
+        if (!email) {
+            return res.status(400).json({ message: 'Email is required' });
         }
 
-    const messageBody = `Welcome to Peslamaa chat application. Your OTP is ${otp}. Expires in 10 minutes.`;
-        const sent = await twilioClient.messages.create({ body: messageBody, from, to });
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ message: 'Email already exists' });
+        }
 
-        return res.status(200).json({ message: 'OTP sent', sid: sent.sid });
+        const otp = generateOTP();
+        
+        otpStore.set(email, {
+            code: otp,
+            expiresAt: Date.now() + 10 * 60 * 1000 
+        });
+
+        await sendOtpEmail(email, otp);
+
+        res.status(200).json({ message: 'OTP sent successfully to your email' });
     } catch (error) {
-        console.error('sendSms error', error);
-        const payload = { message: 'Failed to send OTP' };
-        if (process.env.NODE_ENV !== 'production') {
-            payload.error = error?.message || 'Unknown error';
-            if (error?.code) payload.code = error.code;
-            if (error?.moreInfo) payload.moreInfo = error.moreInfo;
-        }
-        return res.status(500).json(payload);
+        console.error('sendOtp error:', error);
+        const message = error.message === 'Invalid email address' 
+            ? 'Invalid email address' 
+            : 'Failed to send OTP';
+        res.status(400).json({ message });
     }
 };
-export const verifyOtpMiddleware = async (req, res, next) => {
+
+export const verifyOtp = async (req, res, next) => {
     try {
-    const rawPhone = req.body.phone;
-    const rawCode = req.body.code;
-    if (!rawPhone || !rawCode) return res.status(400).json({ message: 'Phone and code are required' });
+        const { email, otp } = req.body;
 
-    const local = toLocal10(rawPhone);
-    if (!local) return res.status(400).json({ message: 'Phone must be a 10-digit number' });
-    const code = String(rawCode).trim();
-
-    const record = otpStore.get(local);
-        if (!record) return res.status(401).json({ message: 'OTP not found or expired' });
-
-        if (Date.now() > record.expires) {
-            otpStore.delete(phone);
-            return res.status(401).json({ message: 'OTP expired' });
+        if (!email || !otp) {
+            return res.status(400).json({ message: 'Email and OTP are required' });
         }
 
-    if (record.otp !== code) return res.status(401).json({ message: 'Invalid OTP' });
-    otpStore.delete(local);
-    req.verifiedPhone = local;
+        const stored = otpStore.get(email);
+
+        if (!stored) {
+            return res.status(400).json({ message: 'No OTP found for this email. Please request a new one.' });
+        }
+
+        if (Date.now() > stored.expiresAt) {
+            otpStore.delete(email);
+            return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+        }
+
+        if (stored.code !== otp) {
+            return res.status(400).json({ message: 'Invalid OTP' });
+        }
+        otpStore.delete(email);
+        
+        req.verifiedEmail = email;
         next();
     } catch (error) {
-        console.error('verifyOtpMiddleware error', error);
-        return res.status(500).json({ message: 'Error verifying OTP' });
+        console.error('verifyOtp error:', error);
+        res.status(500).json({ message: 'Failed to verify OTP' });
     }
 };
 

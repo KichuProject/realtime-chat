@@ -15,16 +15,7 @@ const userSchema = new mongoose.Schema(
             type: String,
             unique: true,
             required: true,
-            validate: {
-                validator: function(v) {
-                    if (!v) return false;
-                    const asStr = String(v);
-                    if (/^\+\d{10,15}$/.test(asStr)) return true;
-                    if (/^\d{10}$/.test(asStr)) return true;
-                    return false;
-                },
-                message: props => `${props.value} is not a valid phone number`,
-            }
+            
         },
         password:{
             type: String,

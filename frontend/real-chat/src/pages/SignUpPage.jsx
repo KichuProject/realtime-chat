@@ -9,14 +9,15 @@ const SignUpPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
-    phone: "",
     email: "",
     password: "",
+    phone: "",
   });
   const {signUp,isSigningUp, sendOtp} = useAuthStore();
   const [isOtpStep, setIsOtpStep] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+  
   const validateForm = () => {
     if(!formData.fullName.trim()){
       return toast.error("Full Name is required");
@@ -25,7 +26,10 @@ const SignUpPage = () => {
       return toast.error("Email is required");
     }
     if(!formData.phone.trim()){
-      return toast.error("Phone is required");
+      return toast.error("Phone number is required");
+    }
+    if(formData.phone.length<10||formData.phone.length>10){
+      return toast.error("Invalid Phone number")
     }
     if(!/\S+@\S+\.\S+/.test(formData.email)){
       return toast.error("Email is invalid");
@@ -38,17 +42,18 @@ const SignUpPage = () => {
     }
     return true;
   };
+  
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     const isValid = validateForm();
     if(isValid!==true) return;
     try {
       setIsSendingOtp(true);
-      await sendOtp(formData.phone);
+      await sendOtp(formData.email);
       setIsOtpStep(true);
       setOtpCode("");
     } catch (err) {
-      toast.error(err.response?.data?.message);
+      toast.error(err.response?.data?.message || 'Failed to send OTP');
     } finally {
       setIsSendingOtp(false);
     }
@@ -59,7 +64,7 @@ const SignUpPage = () => {
     if(!otpCode.trim()){
       return toast.error("Enter the OTP code");
     }
-    await signUp({...formData, code: otpCode});
+    await signUp({...formData, otp: otpCode});
   };
 
   return (
@@ -108,12 +113,10 @@ const SignUpPage = () => {
                 </div>
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  pattern="\d{10}"
                   className={`input input-bordered w-full pl-10`}
-                  placeholder="0123456789"
+                  placeholder="+911234567890"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '').slice(0,10) })}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 />
               </div>
             </div>
@@ -170,11 +173,14 @@ const SignUpPage = () => {
             {isOtpStep && (
               <>
                 <div className="alert bg-base-200 text-base-content/70">
-                  OTP sent to <span className="font-medium ml-1">{formData.phone}</span>. Enter the code to verify.
+                  <div className="flex flex-col gap-1">
+                    <p>OTP sent to <span className="font-semibold text-primary">{formData.email}</span></p>
+                    <p className="text-sm">Check your inbox and enter the 6-digit code below.</p>
+                  </div>
                 </div>
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text font-medium">OTP Code</span>
+                    <span className="label-text font-medium">Enter OTP Code</span>
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center z-10 pointer-events-none">
@@ -182,17 +188,20 @@ const SignUpPage = () => {
                     </div>
                     <input
                       type="text"
-                      className={`input input-bordered w-full pl-10`}
-                      placeholder="123456"
+                      inputMode="numeric"
+                      maxLength="6"
+                      className={`input input-bordered w-full pl-10 text-center text-lg tracking-widest`}
+                      placeholder="000000"
                       value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      autoFocus
                     />
                   </div>
                 </div>
               </>
             )}
 
-            <div className="flex gap-2">
+            <div className="w-full">
               {!isOtpStep ? (
                 <button type="submit" className="btn btn-primary w-full" disabled={isSendingOtp}>
                   {isSendingOtp ? (
@@ -205,25 +214,28 @@ const SignUpPage = () => {
                   )}
                 </button>
               ) : (
-                <>
-                  <button type="submit" className="btn btn-primary w-full" disabled={isSigningUp} >
+                <div className="space-y-3">
+                  <button type="submit" className="btn btn-primary w-full" disabled={isSigningUp}>
                     {isSigningUp ? (
                       <>
                         <Loader2 className="size-5 animate-spin" />
                         Verifying...
                       </>
                     ) : (
-                      "Verify"
+                      "Verify & Create Account"
                     )}
                   </button>
                   <button
                     type="button"
-                    className="btn w-full"
-                    onClick={() => setIsOtpStep(false)}
+                    className="btn btn-ghost w-full"
+                    onClick={() => {
+                      setIsOtpStep(false);
+                      setOtpCode("");
+                    }}
                   >
-                    Back
+                    Back to Registration
                   </button>
-                </>
+                </div>
               )}
             </div>
           </form>

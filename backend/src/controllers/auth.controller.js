@@ -11,21 +11,18 @@ export const signup = async (req, res) => {
         if(password.length < 6){
             return res.status(400).json({message: "Password must be at least 6 characters long"});
         }
-        const verifiedPhone = req.verifiedPhone || (phone || '').trim();
-        if (!verifiedPhone) {
-            return res.status(400).json({ message: "Phone not verified" });
-        }
-        const user= await User.findOne({email});
+        
+        const verifiedEmail = req.verifiedEmail || email;
+        
+        const user= await User.findOne({email: verifiedEmail});
         if(user){
             return res.status(400).json({message: "Email already exists"});
         }
-        const phoneUser= await User.findOne({ phone: verifiedPhone });
-        if(phoneUser){
-            return res.status(400).json({message: "Phone number already exists"});
-        }
+        
         const salt=await bcrypt.genSalt(10);
         const hashedPassword=await bcrypt.hash(password,salt);
-    const newUser= new User({fullName, email, password: hashedPassword, phone: verifiedPhone});
+        const newUser= new User({fullName, email: verifiedEmail, password: hashedPassword, phone: phone || ''});
+        
         if(newUser){
             generateToken(newUser._id,res);
             const savedUser= await newUser.save();
